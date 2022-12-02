@@ -1,0 +1,67 @@
+version: '3.8'
+
+x-common-variables: &common-variables
+  POSTGRES_DATABASE: BookStore
+  POSTGRES_USER: POSTGRES_USER
+  POSTGRES_PASSWORD: POSTGRES_PASSWORD
+
+services:
+  mysql_db:
+    image: postgres:14.1-alpine
+    restart: always
+    cap_add:
+      - SYS_NICE
+    volumes:
+      - "./setup.sql:/docker-entrypoint-initdb.d/setup.sql"
+    ports:
+      - '5432:5432'
+    environment:
+      <<: *common-variables
+      POSTGRES_DATABASE: BookStore
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: abdou
+
+  nginx:
+    depends_on:
+      - api
+      - frontend
+    restart: always
+    build:
+      dockerfile: Dockerfile
+      context: ./nginx
+    ports:
+      - "3050:80"
+
+  api:
+    build:
+      dockerfile: Dockerfile
+      context: "./backend"
+    depends_on:
+      - postgres_db
+    volumes:
+      - /app/node_modules
+      - ./backend:/backend
+    environment:
+      <<: *common-variables
+      POSTGRES_HOST_IP: postgres_db
+
+  client:
+    stdin_open: true
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    build:
+      dockerfile: Dockerfile
+      context: ./frontend
+    volumes:
+      - /app/node_modules
+      - ./frontend:/frontend
+
+  adminer:
+      image: adminer:latest
+      restart: unless-stopped
+      ports:
+        - 8000:8080
+      depends_on:
+        - postgres_db
+      environment:
+        ADMINER_DEFAULT_SERVER: postgres_db
